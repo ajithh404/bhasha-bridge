@@ -127,7 +127,7 @@ git push
 
 ## Team
 
-Built with ❤️ for iDEA 2.0 — PSBs Hackathon Series 2026
+Built with ❤️ for iDEA 2.0 — PSBs Hackathon Series 2026 by Team 'Scarecrow'
 Presented by Union Bank of India · Guided by DFS & IBA
 
 ---
