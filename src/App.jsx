@@ -97,7 +97,7 @@ function speakWithGoogleTTS(text, ttsLang, onStart, onEnd) {
   if (current.trim()) chunks.push(current.trim())
   if (!chunks.length) { onEnd?.(); return }
 
- onStart?.()
+  onStart?.()
   let index = 0
 
   const localeMap = {
@@ -113,10 +113,10 @@ function speakWithGoogleTTS(text, ttsLang, onStart, onEnd) {
     u.rate = 0.88
     u.volume = 1
     const voices = window.speechSynthesis.getVoices()
-    const ttsLangCode = locale.split('-')[0]
+    const code = locale.split('-')[0]
     const match =
       voices.find(v => v.lang === locale) ||
-      voices.find(v => v.lang.startsWith(ttsLangCode)) ||
+      voices.find(v => v.lang.startsWith(code)) ||
       voices.find(v => v.lang.includes('IN'))
     if (match) u.voice = match
     u.onend = next
@@ -126,28 +126,26 @@ function speakWithGoogleTTS(text, ttsLang, onStart, onEnd) {
 
   const playChunk = (chunk) => {
     const locale = localeMap[ttsLang] || ttsLang + '-IN'
-    const googleUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=${ttsLang}&client=gtx&q=${encodeURIComponent(chunk)}`
 
-    const audio = new Audio(googleUrl)
+    // On Vercel (BASE is '') use /api/tts — on local use googleapis directly
+    const isVercel = BASE === ''
+    const ttsUrl = isVercel
+      ? `/api/tts?lang=${ttsLang}&text=${encodeURIComponent(chunk)}`
+      : `https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=${ttsLang}&client=gtx&q=${encodeURIComponent(chunk)}`
 
-    // Pre-load the audio fully before playing
+    const audio = new Audio(ttsUrl)
     audio.preload = 'auto'
     audio.load()
 
-    const onDone = () => {
-      // Small gap between chunks so they don't blur together
-      setTimeout(() => playNext(), 120)
-    }
+    const onDone = () => setTimeout(() => playNext(), 120)
 
     audio.onended = onDone
     audio.onerror = () => tryBrowserTTS(chunk, locale, () => setTimeout(() => playNext(), 120))
 
-    // Wait for enough data before playing
     audio.oncanplaythrough = () => {
       audio.play().catch(() => tryBrowserTTS(chunk, locale, () => setTimeout(() => playNext(), 120)))
     }
 
-    // Fallback if oncanplaythrough never fires (some browsers)
     setTimeout(() => {
       if (audio.readyState >= 3) {
         audio.play().catch(() => tryBrowserTTS(chunk, locale, () => setTimeout(() => playNext(), 120)))
@@ -161,7 +159,6 @@ function speakWithGoogleTTS(text, ttsLang, onStart, onEnd) {
     playChunk(chunk)
   }
 
-  // Small initial delay so the UI settles before audio starts
   setTimeout(() => playNext(), 300)
 }
 
