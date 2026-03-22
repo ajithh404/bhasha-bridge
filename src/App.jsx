@@ -97,54 +97,72 @@ function speakWithGoogleTTS(text, ttsLang, onStart, onEnd) {
   if (current.trim()) chunks.push(current.trim())
   if (!chunks.length) { onEnd?.(); return }
 
-  onStart?.()
+ onStart?.()
   let index = 0
+
+  const localeMap = {
+    'hi': 'hi-IN', 'ta': 'ta-IN', 'te': 'te-IN',
+    'bn': 'bn-IN', 'mr': 'mr-IN', 'gu': 'gu-IN',
+    'kn': 'kn-IN', 'ml': 'ml-IN', 'en': 'en-IN'
+  }
+
+  const tryBrowserTTS = (chunk, locale, next) => {
+    window.speechSynthesis.cancel()
+    const u = new SpeechSynthesisUtterance(chunk)
+    u.lang = locale
+    u.rate = 0.88
+    u.volume = 1
+    const voices = window.speechSynthesis.getVoices()
+    const ttsLangCode = locale.split('-')[0]
+    const match =
+      voices.find(v => v.lang === locale) ||
+      voices.find(v => v.lang.startsWith(ttsLangCode)) ||
+      voices.find(v => v.lang.includes('IN'))
+    if (match) u.voice = match
+    u.onend = next
+    u.onerror = next
+    window.speechSynthesis.speak(u)
+  }
+
+  const playChunk = (chunk) => {
+    const locale = localeMap[ttsLang] || ttsLang + '-IN'
+    const googleUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=${ttsLang}&client=gtx&q=${encodeURIComponent(chunk)}`
+
+    const audio = new Audio(googleUrl)
+
+    // Pre-load the audio fully before playing
+    audio.preload = 'auto'
+    audio.load()
+
+    const onDone = () => {
+      // Small gap between chunks so they don't blur together
+      setTimeout(() => playNext(), 120)
+    }
+
+    audio.onended = onDone
+    audio.onerror = () => tryBrowserTTS(chunk, locale, () => setTimeout(() => playNext(), 120))
+
+    // Wait for enough data before playing
+    audio.oncanplaythrough = () => {
+      audio.play().catch(() => tryBrowserTTS(chunk, locale, () => setTimeout(() => playNext(), 120)))
+    }
+
+    // Fallback if oncanplaythrough never fires (some browsers)
+    setTimeout(() => {
+      if (audio.readyState >= 3) {
+        audio.play().catch(() => tryBrowserTTS(chunk, locale, () => setTimeout(() => playNext(), 120)))
+      }
+    }, 800)
+  }
 
   const playNext = () => {
     if (index >= chunks.length) { onEnd?.(); return }
     const chunk = chunks[index++]
-
-    // Map tts lang code to full locale for MyMemory
-    const localeMap = {
-      'hi': 'hi-IN', 'ta': 'ta-IN', 'te': 'te-IN',
-      'bn': 'bn-IN', 'mr': 'mr-IN', 'gu': 'gu-IN',
-      'kn': 'kn-IN', 'ml': 'ml-IN', 'en': 'en-IN'
-    }
-    const locale = localeMap[ttsLang] || ttsLang + '-IN'
-
-    // Method 1 — MyMemory TTS (free, no key, no CORS)
-    const myMemoryUrl = `https://api.mymemory.translated.net/api/get?q=${encodeURIComponent(chunk)}&langpair=${ttsLang}|${ttsLang}&of=json&mt=1`
-
-    // Use SpeechSynthesis with a specific voice matched to language
-    const tryBrowserTTS = () => {
-      window.speechSynthesis.cancel()
-      const u = new SpeechSynthesisUtterance(chunk)
-      u.lang = locale
-      u.rate = 0.88
-      u.volume = 1
-
-      // Try to find the best matching voice
-      const voices = window.speechSynthesis.getVoices()
-      const match =
-        voices.find(v => v.lang === locale) ||
-        voices.find(v => v.lang.startsWith(ttsLang)) ||
-        voices.find(v => v.lang.includes('IN'))
-
-      if (match) u.voice = match
-      u.onend = playNext
-      u.onerror = playNext
-      window.speechSynthesis.speak(u)
-    }
-
-    // Method 1 — Google TTS via a working public endpoint
-    const googleUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=${ttsLang}&client=gtx&q=${encodeURIComponent(chunk)}`
-    const audio = new Audio(googleUrl)
-    audio.onended = playNext
-    audio.onerror = () => tryBrowserTTS()
-    audio.play().catch(() => tryBrowserTTS())
+    playChunk(chunk)
   }
 
-  playNext()
+  // Small initial delay so the UI settles before audio starts
+  setTimeout(() => playNext(), 300)
 }
 
 // ── Groq API ───────────────────────────────────────────────────────────────
