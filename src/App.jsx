@@ -84,6 +84,7 @@ const INTENT_ICONS = {
 // ── Google TTS via server ──────────────────────────────────────────────────
 function speakWithGoogleTTS(text, ttsLang, onStart, onEnd) {
   if (!text || !ttsLang) { onEnd?.(); return }
+
   const raw = text.match(/[^।\.!\?]+[।\.!\?]*/g) || [text]
   const chunks = []
   let current = ''
@@ -98,15 +99,51 @@ function speakWithGoogleTTS(text, ttsLang, onStart, onEnd) {
 
   onStart?.()
   let index = 0
+
   const playNext = () => {
     if (index >= chunks.length) { onEnd?.(); return }
     const chunk = chunks[index++]
-    const url = `${BASE}/tts?lang=${ttsLang}&text=${encodeURIComponent(chunk)}`
-    const audio = new Audio(url)
+
+    // Map tts lang code to full locale for MyMemory
+    const localeMap = {
+      'hi': 'hi-IN', 'ta': 'ta-IN', 'te': 'te-IN',
+      'bn': 'bn-IN', 'mr': 'mr-IN', 'gu': 'gu-IN',
+      'kn': 'kn-IN', 'ml': 'ml-IN', 'en': 'en-IN'
+    }
+    const locale = localeMap[ttsLang] || ttsLang + '-IN'
+
+    // Method 1 — MyMemory TTS (free, no key, no CORS)
+    const myMemoryUrl = `https://api.mymemory.translated.net/api/get?q=${encodeURIComponent(chunk)}&langpair=${ttsLang}|${ttsLang}&of=json&mt=1`
+
+    // Use SpeechSynthesis with a specific voice matched to language
+    const tryBrowserTTS = () => {
+      window.speechSynthesis.cancel()
+      const u = new SpeechSynthesisUtterance(chunk)
+      u.lang = locale
+      u.rate = 0.88
+      u.volume = 1
+
+      // Try to find the best matching voice
+      const voices = window.speechSynthesis.getVoices()
+      const match =
+        voices.find(v => v.lang === locale) ||
+        voices.find(v => v.lang.startsWith(ttsLang)) ||
+        voices.find(v => v.lang.includes('IN'))
+
+      if (match) u.voice = match
+      u.onend = playNext
+      u.onerror = playNext
+      window.speechSynthesis.speak(u)
+    }
+
+    // Method 1 — Google TTS via a working public endpoint
+    const googleUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=${ttsLang}&client=gtx&q=${encodeURIComponent(chunk)}`
+    const audio = new Audio(googleUrl)
     audio.onended = playNext
-    audio.onerror = () => playNext()
-    audio.play().catch(() => playNext())
+    audio.onerror = () => tryBrowserTTS()
+    audio.play().catch(() => tryBrowserTTS())
   }
+
   playNext()
 }
 
