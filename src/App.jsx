@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const BASE = import.meta.env.VITE_API_URL ?? ''
 // ── Logo SVG inline (BhashaBridge) ─────────────────────────────────────────
 const Logo = ({ size = 40 }) => (
   <svg width={size} height={size} viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
